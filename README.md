@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 # Avangard Gym - Management System
 
 A comprehensive gym membership management application built with Flutter, following the BLoC architecture pattern.
@@ -102,3 +103,6 @@ lib/
 ## License
 
 This project is for portfolio/demonstration purposes.
+=======
+# AvangardGymApp
+>>>>>>> da19c6f455f81b6554c02ff196ccccaa2f2bac2d
