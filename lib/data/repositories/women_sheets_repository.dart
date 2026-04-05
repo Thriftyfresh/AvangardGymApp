@@ -6,9 +6,9 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 
 import '../../core/constants.dart';
 
-class SheetsRepository {
-  static const _spreadsheetId = AppConstants.spreadsheetId;
-  static const _range = 'Membership!A2:R';
+class WomenSheetsRepository {
+  static const _spreadsheetId = AppConstants.womenSpreadsheetId;
+  static const _range = 'A2:R';
   static const _scopes = [SheetsApi.spreadsheetsScope];
 
   Future<SheetsApi> _getSheetsApi() async {
@@ -18,11 +18,10 @@ class SheetsRepository {
     return SheetsApi(client);
   }
 
-  Future<SyncResult> syncMembers() async {
+  Future<WomenSyncResult> syncMembers() async {
     final firestore = FirebaseFirestore.instance;
 
-    // Fetch all existing members with CPR and their doc IDs + startDate
-    final existingSnap = await firestore.collection('members').get();
+    final existingSnap = await firestore.collection('women_members').get();
     final existingMap = <String, _ExistingMember>{};
     for (final doc in existingSnap.docs) {
       final cpr = (doc.data()['cpr'] ?? '').toString();
@@ -32,11 +31,10 @@ class SheetsRepository {
       }
     }
 
-    // Fetch rows from Google Sheets
     final sheetsApi = await _getSheetsApi();
     final response = await sheetsApi.spreadsheets.values.get(_spreadsheetId, _range);
     final rows = response.values;
-    if (rows == null || rows.isEmpty) return SyncResult(added: 0, skipped: 0, updated: 0);
+    if (rows == null || rows.isEmpty) return WomenSyncResult(added: 0, skipped: 0, updated: 0);
 
     int added = 0;
     int skipped = 0;
@@ -48,15 +46,17 @@ class SheetsRepository {
       final name = _str(row, 3);
       if (name.isEmpty) { skipped++; continue; }
 
+      final cpr = _str(row, 2);
+      if (cpr.isEmpty) { skipped++; continue; }
+
       final startDate = _parseDate(_str(row, 10));
-      final endDate   = _parseDate(_str(row, 11));
-      final today     = DateTime.now();
+      final endDate = _parseDate(_str(row, 11));
 
       if (startDate == null || endDate == null) { skipped++; continue; }
       if (startDate.year < 2000 || startDate.year > 2100) { skipped++; continue; }
       if (endDate.year < 2000 || endDate.year > 2100) { skipped++; continue; }
 
-      final cpr = _str(row, 2);
+      final today = DateTime.now();
 
       final memberData = {
         'rowNumber':    _str(row, 0),
@@ -65,6 +65,7 @@ class SheetsRepository {
         'name':         name,
         'birthday':     _str(row, 4),
         'phone':        _str(row, 5),
+        'email':        _str(row, 6),
         'membership':   _str(row, 7),
         'referral':     _str(row, 8),
         'package':      _str(row, 9),
@@ -81,28 +82,18 @@ class SheetsRepository {
         'lastEditedBy': 'sheets_sync',
       };
 
-      if (cpr.isEmpty) {
-        // No CPR — skip, can't deduplicate
-        skipped++;
-        continue;
-      }
-
       if (!existingMap.containsKey(cpr)) {
-        // New member — add
-        final ref = await firestore.collection('members').add(memberData);
+        final ref = await firestore.collection('women_members').add(memberData);
         existingMap[cpr] = _ExistingMember(docId: ref.id, startDate: startDate);
         added++;
       } else {
-        // Existing member — check if this is a newer entry
         final existing = existingMap[cpr]!;
         if (existing.docId.isEmpty) { skipped++; continue; }
         if (existing.startDate != null && startDate.isAfter(existing.startDate!)) {
-          // Move current data to history, then update with new data
-          final docRef = firestore.collection('members').doc(existing.docId);
+          final docRef = firestore.collection('women_members').doc(existing.docId);
           final currentDoc = await docRef.get();
           if (currentDoc.exists) {
             final currentData = currentDoc.data()!;
-            // Save current to history
             await docRef.collection('history').add({
               'membership':   currentData['membership'] ?? '',
               'package':      currentData['package'] ?? '',
@@ -116,7 +107,6 @@ class SheetsRepository {
               'creditCard':   currentData['creditCard'] ?? '',
               'status':       'inactive',
             });
-            // Update with new data
             await docRef.update(memberData);
             existingMap[cpr] = _ExistingMember(docId: existing.docId, startDate: startDate);
             updated++;
@@ -127,7 +117,7 @@ class SheetsRepository {
       }
     }
 
-    return SyncResult(added: added, skipped: skipped, updated: updated);
+    return WomenSyncResult(added: added, skipped: skipped, updated: updated);
   }
 
   Future<void> addMemberToSheet({
@@ -135,6 +125,7 @@ class SheetsRepository {
     required String name,
     required String birthday,
     required String phone,
+    required String email,
     required String membership,
     required String referral,
     required String package,
@@ -146,8 +137,7 @@ class SheetsRepository {
     required String creditCard,
   }) async {
     final sheetsApi = await _getSheetsApi();
-
-    final existing = await sheetsApi.spreadsheets.values.get(_spreadsheetId, 'Membership!D2:D10000');
+    final existing = await sheetsApi.spreadsheets.values.get(_spreadsheetId, 'D2:D10000');
     int lastDataRow = 1;
     if (existing.values != null) {
       lastDataRow = existing.values!.length + 1;
@@ -155,29 +145,16 @@ class SheetsRepository {
     final nextRow = lastDataRow + 1;
 
     final row = [
-      '',
-      '',
-      cpr,
-      name,
-      birthday,
-      phone,
-      membership,
-      referral,
-      package,
+      '', '', cpr, name, birthday, phone, email, membership, referral, package,
       '${startDate.year}-${startDate.month.toString().padLeft(2, '0')}-${startDate.day.toString().padLeft(2, '0')}',
       '${endDate.year}-${endDate.month.toString().padLeft(2, '0')}-${endDate.day.toString().padLeft(2, '0')}',
-      '',
-      '',
-      recept,
-      benefit,
-      cash,
-      creditCard,
+      '', '', recept, benefit, cash, creditCard,
     ];
 
     await sheetsApi.spreadsheets.values.update(
       ValueRange(values: [row]),
       _spreadsheetId,
-      'Membership!A$nextRow:Q$nextRow',
+      'A$nextRow:R$nextRow',
       valueInputOption: 'USER_ENTERED',
     );
   }
@@ -189,9 +166,7 @@ class SheetsRepository {
 
   DateTime? _parseDate(String val) {
     if (val.isEmpty) return null;
-    try {
-      return DateTime.parse(val);
-    } catch (_) {}
+    try { return DateTime.parse(val); } catch (_) {}
     try {
       final parts = val.split(RegExp(r'[/\-]'));
       if (parts.length == 3) {
@@ -216,9 +191,9 @@ class _ExistingMember {
   _ExistingMember({required this.docId, this.startDate});
 }
 
-class SyncResult {
+class WomenSyncResult {
   final int added;
   final int skipped;
   final int updated;
-  SyncResult({required this.added, required this.skipped, required this.updated});
+  WomenSyncResult({required this.added, required this.skipped, required this.updated});
 }

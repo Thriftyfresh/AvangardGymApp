@@ -3,6 +3,8 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import '../../bloc/sync/sync_bloc.dart';
 import '../../bloc/sync/sync_event.dart';
 import '../../bloc/sync/sync_state.dart';
+import '../../bloc/member/member_bloc.dart';
+import '../../bloc/member/member_event.dart';
 
 class ImportScreen extends StatelessWidget {
   const ImportScreen({super.key});
@@ -14,6 +16,7 @@ class ImportScreen extends StatelessWidget {
       body: BlocConsumer<SyncBloc, SyncState>(
         listener: (context, state) {
           if (state is SyncSuccess) {
+            context.read<MemberBloc>().add(LoadMembers());
             ScaffoldMessenger.of(context).showSnackBar(SnackBar(
               content: Text('✅ Added ${state.added}, updated ${state.updated}, skipped ${state.skipped}'),
               backgroundColor: Colors.green,

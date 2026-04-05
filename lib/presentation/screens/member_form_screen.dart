@@ -3,11 +3,13 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../../bloc/member/member_bloc.dart';
 import '../../bloc/member/member_event.dart';
+import '../../bloc/women/women_member_bloc.dart';
 import '../../data/models/member_model.dart';
 
 class MemberFormScreen extends StatefulWidget {
   final MemberModel? member;
-  const MemberFormScreen({super.key, this.member});
+  final bool isWomen;
+  const MemberFormScreen({super.key, this.member, this.isWomen = false});
 
   @override
   State<MemberFormScreen> createState() => _MemberFormScreenState();
@@ -105,9 +107,17 @@ class _MemberFormScreenState extends State<MemberFormScreen> {
       lastEditedBy: adminId,
     );
     if (_isEditing) {
-      context.read<MemberBloc>().add(UpdateMember(member));
+      if (widget.isWomen) {
+        context.read<WomenMemberBloc>().add(UpdateMember(member));
+      } else {
+        context.read<MemberBloc>().add(UpdateMember(member));
+      }
     } else {
-      context.read<MemberBloc>().add(AddMember(member));
+      if (widget.isWomen) {
+        context.read<WomenMemberBloc>().add(AddMember(member));
+      } else {
+        context.read<MemberBloc>().add(AddMember(member));
+      }
     }
     Navigator.pop(context);
   }

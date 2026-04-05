@@ -8,6 +8,8 @@ import 'bloc/member/member_bloc.dart';
 import 'bloc/sync/sync_bloc.dart';
 import 'bloc/admin/admin_bloc.dart';
 import 'bloc/audit/audit_bloc.dart';
+import 'bloc/women/women_member_bloc.dart';
+import 'bloc/women/women_sync_bloc.dart';
 import 'core/constants.dart';
 import 'core/notification_service.dart';
 import 'core/theme_provider.dart';
@@ -53,6 +55,8 @@ class MyAppState extends State<MyApp> {
         BlocProvider(create: (_) => SyncBloc()),
         BlocProvider(create: (_) => AdminBloc()),
         BlocProvider(create: (_) => AuditBloc()),
+        BlocProvider(create: (_) => WomenMemberBloc()),
+        BlocProvider(create: (_) => WomenSyncBloc()),
       ],
       child: MaterialApp(
         title: AppConstants.appName,

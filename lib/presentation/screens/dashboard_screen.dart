@@ -15,6 +15,7 @@ import 'admin_screen.dart';
 import 'charts_screen.dart';
 import 'login_screen.dart';
 import 'audit_screen.dart';
+import 'women/women_dashboard_screen.dart';
 
 class DashboardScreen extends StatefulWidget {
   final String role;
@@ -251,6 +252,20 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   Navigator.pop(context);
                   Navigator.push(context, MaterialPageRoute(builder: (_) => const ImportScreen()));
                 }),
+                const Divider(),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                  child: Text('WOMEN\'S SECTION', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.pink[300], letterSpacing: 1)),
+                ),
+                ListTile(
+                  leading: const Icon(Icons.woman_rounded, color: Colors.pink),
+                  title: const Text('Women\'s Dashboard', style: TextStyle(color: Colors.pink)),
+                  onTap: () {
+                    Navigator.pop(context);
+                    Navigator.push(context, MaterialPageRoute(builder: (_) => WomenDashboardScreen(role: widget.role)));
+                  },
+                ),
+                const Divider(),
                 _drawerItem(Icons.admin_panel_settings_rounded, 'Admin Management', isSuperAdmin ? () {
                   Navigator.pop(context);
                   Navigator.push(context, MaterialPageRoute(builder: (_) => const AdminScreen()));
