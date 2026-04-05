@@ -4,13 +4,15 @@ import 'package:url_launcher/url_launcher.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../bloc/member/member_bloc.dart';
 import '../../bloc/member/member_event.dart';
+import '../../bloc/women/women_member_bloc.dart';
 import '../../data/models/member_model.dart';
 import '../../data/models/member_history_model.dart';
 import 'member_form_screen.dart';
 
 class MemberDetailScreen extends StatefulWidget {
   final MemberModel member;
-  const MemberDetailScreen({super.key, required this.member});
+  final bool isWomen;
+  const MemberDetailScreen({super.key, required this.member, this.isWomen = false});
 
   @override
   State<MemberDetailScreen> createState() => _MemberDetailScreenState();
@@ -29,8 +31,9 @@ class _MemberDetailScreenState extends State<MemberDetailScreen> {
   }
 
   Future<void> _loadHistory() async {
+    final collection = widget.isWomen ? 'women_members' : 'members';
     final snap = await FirebaseFirestore.instance
-        .collection('members')
+        .collection(collection)
         .doc(member.id)
         .collection('history')
         .orderBy('startDate', descending: true)
@@ -58,7 +61,11 @@ class _MemberDetailScreenState extends State<MemberDetailScreen> {
             ),
             onPressed: () {
               final updated = member.copyWith(status: newStatus);
-              context.read<MemberBloc>().add(UpdateMember(updated));
+              if (widget.isWomen) {
+                context.read<WomenMemberBloc>().add(UpdateMember(updated));
+              } else {
+                context.read<MemberBloc>().add(UpdateMember(updated));
+              }
               setState(() => member = updated);
               Navigator.pop(context);
               ScaffoldMessenger.of(context).showSnackBar(
@@ -196,7 +203,7 @@ class _MemberDetailScreenState extends State<MemberDetailScreen> {
             icon: const Icon(Icons.edit_rounded),
             onPressed: () => Navigator.push(
               context,
-              MaterialPageRoute(builder: (_) => MemberFormScreen(member: member)),
+              MaterialPageRoute(builder: (_) => MemberFormScreen(member: member, isWomen: widget.isWomen)),
             ),
           ),
         ],

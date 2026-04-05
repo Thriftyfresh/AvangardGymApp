@@ -143,8 +143,8 @@ class _WomenMembersScreenState extends State<WomenMembersScreen> with SingleTick
         return MemberCard(
           key: ValueKey(member.id),
           member: member,
-          onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => MemberDetailScreen(member: member))),
-          onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => MemberFormScreen(member: member, isWomen: true))),
+          onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => MemberDetailScreen(member: member, isWomen: true))),
+          onEdit: () => Navigator.push(context, MaterialPageRoute(builder: (_) => MemberFormScreen(member: member, isWomen: true))),
           onDelete: isSuperAdmin ? () => _confirmDelete(context, member) : null,
         );
       },
@@ -168,7 +168,7 @@ class _WomenMembersScreenState extends State<WomenMembersScreen> with SingleTick
         return Card(
           margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 5),
           child: ListTile(
-            onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => MemberDetailScreen(member: member))),
+            onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => MemberDetailScreen(member: member, isWomen: true))),
             leading: CircleAvatar(backgroundColor: Colors.pink.withOpacity(0.15), child: const Icon(Icons.cake_rounded, color: Colors.pink)),
             title: Text(member.name, style: const TextStyle(fontWeight: FontWeight.bold)),
             subtitle: Text('Birthday: ${member.birthday}'),
