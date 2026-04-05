@@ -27,7 +27,7 @@ class _MemberFormScreenState extends State<MemberFormScreen> {
   DateTime _endDate = DateTime.now().add(const Duration(days: 30));
 
   static const _membershipOptions = ['1 day', '1 month', '1 year', '2 weeks', '3 month', '6 month', 'special'];
-  static const _packageOptions = ['2in1', 'Boxing', 'Crossfit', 'Gym', 'Gym & Box'];
+  static const _packageOptions = ['2in1', 'Boxing', 'crossfit', 'gym', 'gym & Box'];
   static const _receptOptions = ['Sultan', 'Harris', 'Mikel', 'Abubakar', 'Andrey', 'Ashiraf', 'Astemir', 'Fahad', 'Nik', 'Zahra'];
   static const _statusOptions = ['active', 'inactive', 'frozen'];
 

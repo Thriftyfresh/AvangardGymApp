@@ -18,10 +18,14 @@ class SheetsRepository {
     return SheetsApi(client);
   }
 
+  // Actual column mapping from sheet:
+  // 0: №  1: Renew  2: CPR  3: Name  4: Birthday  5: Phone  6: Email
+  // 7: Membership  8: Referral  9: Package  10: Start  11: Finish
+  // 12: date paid  13: Month paid  14: Recept  15: Benefit  16: Cash  17: Credit card
+
   Future<SyncResult> syncMembers() async {
     final firestore = FirebaseFirestore.instance;
 
-    // Fetch all existing members with CPR and their doc IDs + startDate
     final existingSnap = await firestore.collection('members').get();
     final existingMap = <String, _ExistingMember>{};
     for (final doc in existingSnap.docs) {
@@ -32,7 +36,6 @@ class SheetsRepository {
       }
     }
 
-    // Fetch rows from Google Sheets
     final sheetsApi = await _getSheetsApi();
     final response = await sheetsApi.spreadsheets.values.get(_spreadsheetId, _range);
     final rows = response.values;
@@ -48,6 +51,9 @@ class SheetsRepository {
       final name = _str(row, 3);
       if (name.isEmpty) { skipped++; continue; }
 
+      final cpr = _str(row, 2);
+      if (cpr.isEmpty) { skipped++; continue; }
+
       final startDate = _parseDate(_str(row, 10));
       final endDate   = _parseDate(_str(row, 11));
       final today     = DateTime.now();
@@ -56,8 +62,6 @@ class SheetsRepository {
       if (startDate.year < 2000 || startDate.year > 2100) { skipped++; continue; }
       if (endDate.year < 2000 || endDate.year > 2100) { skipped++; continue; }
 
-      final cpr = _str(row, 2);
-
       final memberData = {
         'rowNumber':    _str(row, 0),
         'renew':        _str(row, 1),
@@ -65,6 +69,7 @@ class SheetsRepository {
         'name':         name,
         'birthday':     _str(row, 4),
         'phone':        _str(row, 5),
+        'email':        _str(row, 6),
         'membership':   _str(row, 7),
         'referral':     _str(row, 8),
         'package':      _str(row, 9),
@@ -81,28 +86,18 @@ class SheetsRepository {
         'lastEditedBy': 'sheets_sync',
       };
 
-      if (cpr.isEmpty) {
-        // No CPR — skip, can't deduplicate
-        skipped++;
-        continue;
-      }
-
       if (!existingMap.containsKey(cpr)) {
-        // New member — add
         final ref = await firestore.collection('members').add(memberData);
         existingMap[cpr] = _ExistingMember(docId: ref.id, startDate: startDate);
         added++;
       } else {
-        // Existing member — check if this is a newer entry
         final existing = existingMap[cpr]!;
         if (existing.docId.isEmpty) { skipped++; continue; }
         if (existing.startDate != null && startDate.isAfter(existing.startDate!)) {
-          // Move current data to history, then update with new data
           final docRef = firestore.collection('members').doc(existing.docId);
           final currentDoc = await docRef.get();
           if (currentDoc.exists) {
             final currentData = currentDoc.data()!;
-            // Save current to history
             await docRef.collection('history').add({
               'membership':   currentData['membership'] ?? '',
               'package':      currentData['package'] ?? '',
@@ -116,7 +111,6 @@ class SheetsRepository {
               'creditCard':   currentData['creditCard'] ?? '',
               'status':       'inactive',
             });
-            // Update with new data
             await docRef.update(memberData);
             existingMap[cpr] = _ExistingMember(docId: existing.docId, startDate: startDate);
             updated++;
@@ -147,6 +141,7 @@ class SheetsRepository {
   }) async {
     final sheetsApi = await _getSheetsApi();
 
+    // Find last row by scanning column D (Name)
     final existing = await sheetsApi.spreadsheets.values.get(_spreadsheetId, 'Membership!D2:D10000');
     int lastDataRow = 1;
     if (existing.values != null) {
@@ -154,30 +149,34 @@ class SheetsRepository {
     }
     final nextRow = lastDataRow + 1;
 
+    // Match exact column order: №, Renew, CPR, Name, Birthday, Phone, Email,
+    // Membership, Referral, Package, Start, Finish, date paid, Month paid,
+    // Recept, Benefit, Cash, Credit card
     final row = [
-      '',
-      '',
-      cpr,
-      name,
-      birthday,
-      phone,
-      membership,
-      referral,
-      package,
-      '${startDate.year}-${startDate.month.toString().padLeft(2, '0')}-${startDate.day.toString().padLeft(2, '0')}',
-      '${endDate.year}-${endDate.month.toString().padLeft(2, '0')}-${endDate.day.toString().padLeft(2, '0')}',
-      '',
-      '',
-      recept,
-      benefit,
-      cash,
-      creditCard,
+      '',           // №
+      '',           // Renew
+      cpr,          // CPR
+      name,         // Name
+      birthday,     // Birthday
+      phone,        // Phone
+      '',           // Email
+      membership,   // Membership
+      referral,     // Client knows about us from?
+      package,      // Package
+      '${startDate.year}-${startDate.month.toString().padLeft(2, '0')}-${startDate.day.toString().padLeft(2, '0')}',  // Start
+      '${endDate.year}-${endDate.month.toString().padLeft(2, '0')}-${endDate.day.toString().padLeft(2, '0')}',        // Finish
+      '',           // date paid
+      '',           // Month paid
+      recept,       // Recept
+      benefit,      // Benefit
+      cash,         // Cash
+      creditCard,   // Credit card
     ];
 
     await sheetsApi.spreadsheets.values.update(
       ValueRange(values: [row]),
       _spreadsheetId,
-      'Membership!A$nextRow:Q$nextRow',
+      'Membership!A$nextRow:R$nextRow',
       valueInputOption: 'USER_ENTERED',
     );
   }
@@ -189,9 +188,7 @@ class SheetsRepository {
 
   DateTime? _parseDate(String val) {
     if (val.isEmpty) return null;
-    try {
-      return DateTime.parse(val);
-    } catch (_) {}
+    try { return DateTime.parse(val); } catch (_) {}
     try {
       final parts = val.split(RegExp(r'[/\-]'));
       if (parts.length == 3) {

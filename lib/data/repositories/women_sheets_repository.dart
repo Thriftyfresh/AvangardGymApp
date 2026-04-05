@@ -18,6 +18,11 @@ class WomenSheetsRepository {
     return SheetsApi(client);
   }
 
+  // Actual column mapping from sheet:
+  // 0: (empty/№)  1: Renew  2: CPR  3: Name  4: Birthday  5: Phone  6: Email
+  // 7: Membership  8: Referral  9: Package  10: Start  11: Finish
+  // 12: date paid  13: Month paid  14: Recept  15: Benefit  16: Cash  17: Credit card
+
   Future<WomenSyncResult> syncMembers() async {
     final firestore = FirebaseFirestore.instance;
 
@@ -137,6 +142,8 @@ class WomenSheetsRepository {
     required String creditCard,
   }) async {
     final sheetsApi = await _getSheetsApi();
+
+    // Find last row by scanning column D (Name)
     final existing = await sheetsApi.spreadsheets.values.get(_spreadsheetId, 'D2:D10000');
     int lastDataRow = 1;
     if (existing.values != null) {
@@ -144,11 +151,28 @@ class WomenSheetsRepository {
     }
     final nextRow = lastDataRow + 1;
 
+    // Match exact column order: №, Renew, CPR, Name, Birthday, Phone, Email,
+    // Membership, Referral, Package, Start, Finish, date paid, Month paid,
+    // Recept, Benefit, Cash, Credit card
     final row = [
-      '', '', cpr, name, birthday, phone, email, membership, referral, package,
-      '${startDate.year}-${startDate.month.toString().padLeft(2, '0')}-${startDate.day.toString().padLeft(2, '0')}',
-      '${endDate.year}-${endDate.month.toString().padLeft(2, '0')}-${endDate.day.toString().padLeft(2, '0')}',
-      '', '', recept, benefit, cash, creditCard,
+      '',           // №
+      '',           // Renew
+      cpr,          // CPR
+      name,         // Name
+      birthday,     // Birthday
+      phone,        // Phone
+      email,        // Email
+      membership,   // Membership
+      referral,     // Client knows about us from?
+      package,      // Package
+      '${startDate.year}-${startDate.month.toString().padLeft(2, '0')}-${startDate.day.toString().padLeft(2, '0')}',  // Start
+      '${endDate.year}-${endDate.month.toString().padLeft(2, '0')}-${endDate.day.toString().padLeft(2, '0')}',        // Finish
+      '',           // date paid
+      '',           // Month paid
+      recept,       // Recept
+      benefit,      // Benefit
+      cash,         // Cash
+      creditCard,   // Credit card
     ];
 
     await sheetsApi.spreadsheets.values.update(
