@@ -32,7 +32,8 @@ class WomenSheetsRepository {
       final cpr = (doc.data()['cpr'] ?? '').toString();
       if (cpr.isNotEmpty) {
         final startDate = (doc.data()['startDate'] as Timestamp?)?.toDate();
-        existingMap[cpr] = _ExistingMember(docId: doc.id, startDate: startDate);
+        final datePaid = _parseDate((doc.data()['datePaid'] ?? '').toString());
+        existingMap[cpr] = _ExistingMember(docId: doc.id, startDate: startDate, datePaid: datePaid);
       }
     }
 
@@ -89,31 +90,38 @@ class WomenSheetsRepository {
 
       if (!existingMap.containsKey(cpr)) {
         final ref = await firestore.collection('women_members').add(memberData);
-        existingMap[cpr] = _ExistingMember(docId: ref.id, startDate: startDate);
+        existingMap[cpr] = _ExistingMember(docId: ref.id, startDate: startDate, datePaid: _parseDate(_str(row, 12)));
         added++;
       } else {
         final existing = existingMap[cpr]!;
         if (existing.docId.isEmpty) { skipped++; continue; }
-        if (existing.startDate != null && startDate.isAfter(existing.startDate!)) {
+        final rowDatePaid = _parseDate(_str(row, 12));
+        final isNewer = (rowDatePaid != null && existing.datePaid != null && rowDatePaid.isAfter(existing.datePaid!)) ||
+                        (rowDatePaid != null && existing.datePaid == null) ||
+                        (startDate.isAfter(existing.startDate ?? DateTime(2000)));
+        if (isNewer) {
           final docRef = firestore.collection('women_members').doc(existing.docId);
           final currentDoc = await docRef.get();
           if (currentDoc.exists) {
             final currentData = currentDoc.data()!;
-            await docRef.collection('history').add({
-              'membership':   currentData['membership'] ?? '',
-              'package':      currentData['package'] ?? '',
-              'startDate':    currentData['startDate'],
-              'endDate':      currentData['endDate'],
-              'datePaid':     currentData['datePaid'] ?? '',
-              'monthPaid':    currentData['monthPaid'] ?? '',
-              'recept':       currentData['recept'] ?? '',
-              'benefit':      currentData['benefit'] ?? '',
-              'cash':         currentData['cash'] ?? '',
-              'creditCard':   currentData['creditCard'] ?? '',
-              'status':       'inactive',
-            });
+            final currentEnd = (currentData['endDate'] as Timestamp?)?.toDate();
+            if (currentEnd == null || endDate != currentEnd) {
+              await docRef.collection('history').add({
+                'membership':   currentData['membership'] ?? '',
+                'package':      currentData['package'] ?? '',
+                'startDate':    currentData['startDate'],
+                'endDate':      currentData['endDate'],
+                'datePaid':     currentData['datePaid'] ?? '',
+                'monthPaid':    currentData['monthPaid'] ?? '',
+                'recept':       currentData['recept'] ?? '',
+                'benefit':      currentData['benefit'] ?? '',
+                'cash':         currentData['cash'] ?? '',
+                'creditCard':   currentData['creditCard'] ?? '',
+                'status':       'inactive',
+              });
+            }
             await docRef.update(memberData);
-            existingMap[cpr] = _ExistingMember(docId: existing.docId, startDate: startDate);
+            existingMap[cpr] = _ExistingMember(docId: existing.docId, startDate: startDate, datePaid: rowDatePaid);
             updated++;
           }
         } else {
@@ -190,18 +198,17 @@ class WomenSheetsRepository {
 
   DateTime? _parseDate(String val) {
     if (val.isEmpty) return null;
+    // Try ISO format first: 2026-05-06
     try { return DateTime.parse(val); } catch (_) {}
+    // dd/MM/yyyy format (used in both sheets)
     try {
-      final parts = val.split(RegExp(r'[/\-]'));
+      final parts = val.split('/');
       if (parts.length == 3) {
-        final a = int.parse(parts[0]);
-        final b = int.parse(parts[1]);
-        final c = int.parse(parts[2]);
-        if (a > 100) return DateTime(a, b, c);
-        if (c > 100) {
-          if (a > 12) return DateTime(c, b, a);
-          if (b > 12) return DateTime(c, a, b);
-          return DateTime(c, b, a);
+        final day   = int.parse(parts[0]);
+        final month = int.parse(parts[1]);
+        final year  = int.parse(parts[2]);
+        if (year > 100 && month >= 1 && month <= 12 && day >= 1 && day <= 31) {
+          return DateTime(year, month, day);
         }
       }
     } catch (_) {}
@@ -212,7 +219,8 @@ class WomenSheetsRepository {
 class _ExistingMember {
   final String docId;
   final DateTime? startDate;
-  _ExistingMember({required this.docId, this.startDate});
+  final DateTime? datePaid;
+  _ExistingMember({required this.docId, this.startDate, this.datePaid});
 }
 
 class WomenSyncResult {

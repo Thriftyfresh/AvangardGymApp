@@ -15,6 +15,7 @@ import '../dashboard_screen.dart';
 import 'women_members_screen.dart';
 import 'women_import_screen.dart';
 import 'women_charts_screen.dart';
+import 'women_daily_report_screen.dart';
 
 class WomenDashboardScreen extends StatefulWidget {
   final String role;
@@ -104,6 +105,10 @@ class _WomenDashboardScreenState extends State<WomenDashboardScreen> {
                   Navigator.pop(context);
                   Navigator.push(context, MaterialPageRoute(builder: (_) => const WomenChartsScreen()));
                 } : null, enabled: isSuperAdmin),
+                _drawerItem(Icons.today_rounded, 'Daily Report', () {
+                  Navigator.pop(context);
+                  Navigator.push(context, MaterialPageRoute(builder: (_) => const WomenDailyReportScreen()));
+                }),
                 _drawerItem(Icons.sync_rounded, 'Sync from Sheets', () {
                   Navigator.pop(context);
                   Navigator.push(context, MaterialPageRoute(builder: (_) => const WomenImportScreen()));

@@ -27,7 +27,9 @@ class NotificationService {
     int notifId = 0;
     for (final doc in snap.docs) {
       final data = doc.data();
-      final endDate = (data['endDate'] as Timestamp).toDate();
+      final endDateRaw = data['endDate'];
+      if (endDateRaw == null) continue;
+      final endDate = (endDateRaw as Timestamp).toDate();
       final daysLeft = endDate.difference(now).inDays;
       final name = data['name'] ?? 'Member';
 

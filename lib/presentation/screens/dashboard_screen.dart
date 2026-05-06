@@ -16,6 +16,7 @@ import 'charts_screen.dart';
 import 'login_screen.dart';
 import 'audit_screen.dart';
 import 'women/women_dashboard_screen.dart';
+import 'daily_report_screen.dart';
 
 class DashboardScreen extends StatefulWidget {
   final String role;
@@ -77,7 +78,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
   void initState() {
     super.initState();
     context.read<MemberBloc>().add(LoadMembers());
-    NotificationService.checkExpiringMemberships();
+    NotificationService.checkExpiringMemberships().catchError((e) => debugPrint('Notification error: $e'));
   }
 
   @override
@@ -248,6 +249,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   Navigator.pop(context);
                   Navigator.push(context, MaterialPageRoute(builder: (_) => const ChartsScreen()));
                 } : null, enabled: isSuperAdmin),
+                _drawerItem(Icons.today_rounded, 'Daily Report', () {
+                  Navigator.pop(context);
+                  Navigator.push(context, MaterialPageRoute(builder: (_) => const DailyReportScreen()));
+                }),
                 _drawerItem(Icons.sync_rounded, 'Sync from Sheets', () {
                   Navigator.pop(context);
                   Navigator.push(context, MaterialPageRoute(builder: (_) => const ImportScreen()));

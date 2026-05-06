@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -27,10 +28,18 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
       final user = FirebaseAuth.instance.currentUser;
       if (user != null) {
         String role = 'admin';
-        final doc = await FirebaseFirestore.instance.collection('admins').doc(user.uid).get();
-        if (doc.exists && doc.data() != null) {
-          role = (doc.data()!['role'] ?? 'admin').toString();
-        }
+        try {
+          final doc = await FirebaseFirestore.instance
+              .collection('admins')
+              .doc(user.uid)
+              .get(const GetOptions(source: Source.cache))
+              .timeout(const Duration(seconds: 3), onTimeout: () =>
+                  FirebaseFirestore.instance.collection('admins').doc(user.uid).get());
+          if (doc.exists && doc.data() != null) {
+            role = (doc.data()!['role'] ?? 'admin').toString();
+          }
+        } catch (_) {}
+        
         if (!mounted) return;
         Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => DashboardScreen(role: role)));
       } else {
