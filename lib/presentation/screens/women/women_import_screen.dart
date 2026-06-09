@@ -18,7 +18,7 @@ class WomenImportScreen extends StatelessWidget {
       child: Scaffold(
         appBar: AppBar(
           title: const Text('Sync Women Members'),
-          backgroundColor: Colors.pink.shade600,
+          backgroundColor: const Color(0xFF7B0045),
           foregroundColor: Colors.white,
         ),
         body: BlocConsumer<WomenSyncBloc, SyncState>(

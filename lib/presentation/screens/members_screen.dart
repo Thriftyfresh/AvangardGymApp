@@ -240,10 +240,15 @@ class _MembersScreenState extends State<MembersScreen> with SingleTickerProvider
       resizeToAvoidBottomInset: true,
       appBar: AppBar(
         title: const Text('Members'),
+        backgroundColor: const Color(0xFF7B2500),
+        foregroundColor: Colors.white,
         bottom: TabBar(
           controller: _tabController,
           isScrollable: true,
           tabs: _tabs.map((t) => Tab(text: t)).toList(),
+          labelColor: Colors.white,
+          unselectedLabelColor: Colors.white60,
+          indicatorColor: Colors.orangeAccent,
         ),
       ),
       body: Column(
@@ -280,13 +285,7 @@ class _MembersScreenState extends State<MembersScreen> with SingleTickerProvider
           ),
         ],
       ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: () => Navigator.push(
-          context,
-          MaterialPageRoute(builder: (_) => const MemberFormScreen()),
-        ),
-        child: const Icon(Icons.add),
-      ),
+      floatingActionButton: null,
     );
   }
 }

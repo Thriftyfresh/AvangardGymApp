@@ -138,7 +138,11 @@ class _MemberFormScreenState extends State<MemberFormScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       resizeToAvoidBottomInset: true,
-      appBar: AppBar(title: Text(_isEditing ? 'Edit Member' : 'Add Member')),
+      appBar: AppBar(
+        title: Text(_isEditing ? 'Edit Member' : 'Add Member'),
+        backgroundColor: widget.isWomen ? const Color(0xFF7B0045) : const Color(0xFF7B2500),
+        foregroundColor: Colors.white,
+      ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(16),
         child: Form(

@@ -12,7 +12,11 @@ class ImportScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Sync Members')),
+      appBar: AppBar(
+        title: const Text('Sync Members'),
+        backgroundColor: const Color(0xFF7B2500),
+        foregroundColor: Colors.white,
+      ),
       body: BlocConsumer<SyncBloc, SyncState>(
         listener: (context, state) {
           if (state is SyncSuccess) {

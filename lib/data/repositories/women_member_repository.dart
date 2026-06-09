@@ -9,7 +9,29 @@ class WomenMemberRepository {
 
   Future<List<MemberModel>> getMembers() async {
     final snap = await _col.orderBy('name').get();
-    return snap.docs.map((doc) => MemberModel.fromMap(doc.id, doc.data())).toList();
+    final now = DateTime.now();
+    final members = <MemberModel>[];
+    var batch = _col.firestore.batch();
+    int batchCount = 0;
+
+    for (final doc in snap.docs) {
+      final member = MemberModel.fromMap(doc.id, doc.data());
+      if (member.status == 'active' && member.endDate.isBefore(now)) {
+        final updated = member.copyWith(status: 'inactive');
+        batch.update(doc.reference, {'status': 'inactive'});
+        members.add(updated);
+        batchCount++;
+        if (batchCount == 400) {
+          await batch.commit();
+          batch = _col.firestore.batch();
+          batchCount = 0;
+        }
+      } else {
+        members.add(member);
+      }
+    }
+    if (batchCount > 0) await batch.commit();
+    return members;
   }
 
   Future<void> addMember(MemberModel member) async {

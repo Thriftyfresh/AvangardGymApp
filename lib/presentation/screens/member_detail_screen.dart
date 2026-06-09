@@ -188,6 +188,8 @@ class _MemberDetailScreenState extends State<MemberDetailScreen> {
       resizeToAvoidBottomInset: true,
       appBar: AppBar(
         title: Text(member.name),
+        backgroundColor: widget.isWomen ? const Color(0xFF7B0045) : const Color(0xFF7B2500),
+        foregroundColor: Colors.white,
         actions: [
           IconButton(
             icon: const Icon(Icons.phone_rounded),

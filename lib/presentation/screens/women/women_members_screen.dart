@@ -193,7 +193,7 @@ class _WomenMembersScreenState extends State<WomenMembersScreen> with SingleTick
       child: Scaffold(
         appBar: AppBar(
           title: const Text('Women Members'),
-          backgroundColor: Colors.pink.shade600,
+          backgroundColor: const Color(0xFF7B0045),
           foregroundColor: Colors.white,
           bottom: TabBar(
             controller: _tabController,
@@ -201,7 +201,7 @@ class _WomenMembersScreenState extends State<WomenMembersScreen> with SingleTick
             tabs: _tabs.map((t) => Tab(text: t)).toList(),
             labelColor: Colors.white,
             unselectedLabelColor: Colors.white60,
-            indicatorColor: Colors.white,
+            indicatorColor: Colors.pinkAccent,
           ),
         ),
         body: Column(
@@ -236,11 +236,7 @@ class _WomenMembersScreenState extends State<WomenMembersScreen> with SingleTick
             ),
           ],
         ),
-        floatingActionButton: FloatingActionButton(
-          backgroundColor: Colors.pink,
-          onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const MemberFormScreen(isWomen: true))),
-          child: const Icon(Icons.add, color: Colors.white),
-        ),
+        floatingActionButton: null,
       ),
     );
   }
