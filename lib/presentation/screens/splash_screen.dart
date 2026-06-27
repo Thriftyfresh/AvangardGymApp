@@ -32,9 +32,8 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
           final doc = await FirebaseFirestore.instance
               .collection('admins')
               .doc(user.uid)
-              .get(const GetOptions(source: Source.cache))
-              .timeout(const Duration(seconds: 3), onTimeout: () =>
-                  FirebaseFirestore.instance.collection('admins').doc(user.uid).get());
+              .get()
+              .timeout(const Duration(seconds: 5));
           if (doc.exists && doc.data() != null) {
             role = (doc.data()!['role'] ?? 'admin').toString();
           }
