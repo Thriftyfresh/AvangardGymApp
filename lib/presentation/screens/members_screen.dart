@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import '../../bloc/member/member_bloc.dart';
@@ -5,7 +6,6 @@ import '../../bloc/member/member_event.dart';
 import '../../bloc/member/member_state.dart';
 import '../../data/models/member_model.dart';
 import '../widgets/member_card.dart';
-import 'member_form_screen.dart';
 import 'member_detail_screen.dart';
 
 class MembersScreen extends StatefulWidget {
@@ -19,6 +19,8 @@ class MembersScreen extends StatefulWidget {
 class _MembersScreenState extends State<MembersScreen> with SingleTickerProviderStateMixin {
   late TabController _tabController;
   String _search = '';
+  Timer? _debounce;
+  final Map<String, int> _birthdayCache = {};
   bool get isSuperAdmin => widget.role == 'superadmin';
 
   final _tabs = ['All', 'Active', 'Inactive', 'Frozen', '🎂'];
@@ -32,6 +34,7 @@ class _MembersScreenState extends State<MembersScreen> with SingleTickerProvider
 
   @override
   void dispose() {
+    _debounce?.cancel();
     _tabController.dispose();
     super.dispose();
   }
@@ -55,9 +58,11 @@ class _MembersScreenState extends State<MembersScreen> with SingleTickerProvider
   Map<int, List<MemberModel>> _groupByYear(List<MemberModel> members) {
     final map = <int, List<MemberModel>>{};
     for (final m in members) {
-      final year = m.startDate.year;
-      map.putIfAbsent(year, () => []);
-      map[year]!.add(m);
+      map.putIfAbsent(m.startDate.year, () => []);
+      map[m.startDate.year]!.add(m);
+    }
+    for (final list in map.values) {
+      list.sort((a, b) => b.startDate.compareTo(a.startDate));
     }
     return map;
   }
@@ -97,7 +102,6 @@ class _MembersScreenState extends State<MembersScreen> with SingleTickerProvider
   Widget _buildYearGroupedList(List<MemberModel> members) {
     final flat = _buildFlatList(members);
     if (flat.isEmpty) return const Center(child: Text('No members found'));
-
     return ListView.builder(
       itemCount: flat.length,
       itemBuilder: (context, index) {
@@ -134,10 +138,6 @@ class _MembersScreenState extends State<MembersScreen> with SingleTickerProvider
             context,
             MaterialPageRoute(builder: (_) => MemberDetailScreen(member: member)),
           ),
-          onEdit: () => Navigator.push(
-            context,
-            MaterialPageRoute(builder: (_) => MemberFormScreen(member: member)),
-          ),
           onDelete: isSuperAdmin ? () => _confirmDelete(context, member) : null,
         );
       },
@@ -145,6 +145,7 @@ class _MembersScreenState extends State<MembersScreen> with SingleTickerProvider
   }
 
   int _daysUntilBirthday(String birthday) {
+    if (_birthdayCache.containsKey(birthday)) return _birthdayCache[birthday]!;
     final now = DateTime.now();
     try {
       final parts = birthday.split(RegExp(r'[/\-]'));
@@ -163,10 +164,10 @@ class _MembersScreenState extends State<MembersScreen> with SingleTickerProvider
         if (bday.isBefore(now.subtract(const Duration(days: 1)))) {
           bday = DateTime(now.year + 1, bday.month, bday.day);
         }
-        return bday.difference(now).inDays;
+        return _birthdayCache[birthday] = bday.difference(now).inDays;
       }
     } catch (_) {}
-    return 999;
+    return _birthdayCache[birthday] = 999;
   }
 
   List<MemberModel> _upcomingBirthdays(List<MemberModel> members) {
@@ -262,7 +263,12 @@ class _MembersScreenState extends State<MembersScreen> with SingleTickerProvider
                 border: OutlineInputBorder(),
                 contentPadding: EdgeInsets.symmetric(vertical: 8),
               ),
-              onChanged: (v) => setState(() => _search = v),
+              onChanged: (v) {
+                _debounce?.cancel();
+                _debounce = Timer(const Duration(milliseconds: 300), () {
+                  setState(() => _search = v);
+                });
+              },
             ),
           ),
           Expanded(
@@ -272,12 +278,53 @@ class _MembersScreenState extends State<MembersScreen> with SingleTickerProvider
                 if (state is MemberError) return Center(child: Text(state.message));
                 if (state is! MemberLoaded) return const SizedBox();
 
+                final prebuilt = {
+                  for (final tab in _tabs)
+                    if (tab != '🎂') tab: _buildFlatList(_filtered(state.members, tab)),
+                };
                 return TabBarView(
                   controller: _tabController,
                   children: _tabs.map((tab) {
                     if (tab == '🎂') return _buildBirthdayList(state.members);
-                    final members = _filtered(state.members, tab);
-                    return _buildYearGroupedList(members);
+                    final flat = prebuilt[tab]!;
+                    if (flat.isEmpty) return const Center(child: Text('No members found'));
+                    return ListView.builder(
+                      itemCount: flat.length,
+                      itemBuilder: (context, index) {
+                        final item = flat[index];
+                        if (item is _YearHeader) {
+                          return Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                            margin: const EdgeInsets.only(top: 8),
+                            child: Row(
+                              children: [
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                                  decoration: BoxDecoration(
+                                    color: Colors.deepOrange.withOpacity(0.1),
+                                    borderRadius: BorderRadius.circular(20),
+                                  ),
+                                  child: Text(
+                                    '${item.year}',
+                                    style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.deepOrange),
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                Text('${item.count} members', style: TextStyle(fontSize: 13, color: Colors.grey[500])),
+                                const Expanded(child: Divider(indent: 12)),
+                              ],
+                            ),
+                          );
+                        }
+                        final member = item as MemberModel;
+                        return MemberCard(
+                          key: ValueKey(member.id),
+                          member: member,
+                          onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => MemberDetailScreen(member: member))),
+                          onDelete: isSuperAdmin ? () => _confirmDelete(context, member) : null,
+                        );
+                      },
+                    );
                   }).toList(),
                 );
               },

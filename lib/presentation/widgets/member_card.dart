@@ -3,14 +3,12 @@ import '../../data/models/member_model.dart';
 
 class MemberCard extends StatelessWidget {
   final MemberModel member;
-  final VoidCallback onEdit;
   final VoidCallback? onDelete;
   final VoidCallback onTap;
 
   const MemberCard({
     super.key,
     required this.member,
-    required this.onEdit,
     required this.onDelete,
     required this.onTap,
   });
@@ -130,11 +128,9 @@ class MemberCard extends StatelessWidget {
                   icon: Icon(Icons.more_vert, color: Colors.grey[500], size: 20),
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                   itemBuilder: (_) => [
-                    const PopupMenuItem(value: 'edit', child: Row(children: [Icon(Icons.edit_outlined, size: 18), SizedBox(width: 8), Text('Edit')])),
                     PopupMenuItem(value: 'delete', child: Row(children: [Icon(Icons.delete_outline, size: 18, color: Colors.red[400]), const SizedBox(width: 8), Text('Delete', style: TextStyle(color: Colors.red[400]))])),
                   ],
                   onSelected: (value) {
-                    if (value == 'edit') onEdit();
                     if (value == 'delete') onDelete?.call();
                   },
                 ),

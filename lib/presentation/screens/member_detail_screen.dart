@@ -7,7 +7,6 @@ import '../../bloc/member/member_event.dart';
 import '../../bloc/women/women_member_bloc.dart';
 import '../../data/models/member_model.dart';
 import '../../data/models/member_history_model.dart';
-import 'member_form_screen.dart';
 
 class MemberDetailScreen extends StatefulWidget {
   final MemberModel member;
@@ -200,13 +199,6 @@ class _MemberDetailScreenState extends State<MemberDetailScreen> {
             icon: const Icon(Icons.message_rounded),
             tooltip: 'Remind via WhatsApp',
             onPressed: _showRemindDialog,
-          ),
-          IconButton(
-            icon: const Icon(Icons.edit_rounded),
-            onPressed: () => Navigator.push(
-              context,
-              MaterialPageRoute(builder: (_) => MemberFormScreen(member: member, isWomen: widget.isWomen)),
-            ),
           ),
         ],
       ),

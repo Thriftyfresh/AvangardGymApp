@@ -6,3 +6,5 @@ abstract class SyncEvent extends Equatable {
 }
 
 class SyncFromSheets extends SyncEvent {}
+
+class NukeAndReimport extends SyncEvent {}

@@ -23,17 +23,32 @@ class WomenSheetsRepository {
   // 7: Membership  8: Referral  9: Package  10: Start  11: Finish
   // 12: date paid  13: Month paid  14: Recept  15: Benefit  16: Cash  17: Credit card
 
+  Future<WomenSyncResult> nukeAndReimport() async {
+    final firestore = FirebaseFirestore.instance;
+    final snap = await firestore.collection('women_members').get();
+    for (final doc in snap.docs) {
+      final historySnap = await doc.reference.collection('history').get();
+      for (final h in historySnap.docs) { await h.reference.delete(); }
+      await doc.reference.delete();
+    }
+    return syncMembers();
+  }
+
   Future<WomenSyncResult> syncMembers() async {
     final firestore = FirebaseFirestore.instance;
 
     final existingSnap = await firestore.collection('women_members').get();
     final existingMap = <String, _ExistingMember>{};
     for (final doc in existingSnap.docs) {
-      final cpr = (doc.data()['cpr'] ?? '').toString();
+      final d = doc.data();
+      final cpr = (d['cpr'] ?? '').toString();
       if (cpr.isNotEmpty) {
-        final startDate = (doc.data()['startDate'] as Timestamp?)?.toDate();
-        final datePaid = _parseDate((doc.data()['datePaid'] ?? '').toString());
-        existingMap[cpr] = _ExistingMember(docId: doc.id, startDate: startDate, datePaid: datePaid);
+        existingMap[cpr] = _ExistingMember(
+          docId: doc.id,
+          startDate: (d['startDate'] as Timestamp?)?.toDate(),
+          datePaid: _parseDate((d['datePaid'] ?? '').toString()),
+          data: d,
+        );
       }
     }
 
@@ -45,6 +60,18 @@ class WomenSheetsRepository {
     int added = 0;
     int skipped = 0;
     int updated = 0;
+    final today = DateTime.now();
+
+    var batch = firestore.batch();
+    int batchCount = 0;
+
+    Future<void> commitBatch() async {
+      if (batchCount > 0) {
+        await batch.commit();
+        batch = firestore.batch();
+        batchCount = 0;
+      }
+    }
 
     for (final row in rows) {
       if (row.length < 4) { skipped++; continue; }
@@ -61,8 +88,6 @@ class WomenSheetsRepository {
       if (startDate == null || endDate == null) { skipped++; continue; }
       if (startDate.year < 2000 || startDate.year > 2100) { skipped++; continue; }
       if (endDate.year < 2000 || endDate.year > 2100) { skipped++; continue; }
-
-      final today = DateTime.now();
 
       final memberData = {
         'rowNumber':    _str(row, 0),
@@ -89,47 +114,56 @@ class WomenSheetsRepository {
       };
 
       if (!existingMap.containsKey(cpr)) {
-        final ref = await firestore.collection('women_members').add(memberData);
-        existingMap[cpr] = _ExistingMember(docId: ref.id, startDate: startDate, datePaid: _parseDate(_str(row, 12)));
+        final newRef = firestore.collection('women_members').doc();
+        batch.set(newRef, memberData);
+        existingMap[cpr] = _ExistingMember(docId: newRef.id, startDate: startDate, datePaid: _parseDate(_str(row, 12)), data: memberData);
+        batchCount++;
         added++;
       } else {
         final existing = existingMap[cpr]!;
         if (existing.docId.isEmpty) { skipped++; continue; }
-        final rowDatePaid = _parseDate(_str(row, 12));
-        final isNewer = (rowDatePaid != null && existing.datePaid != null && rowDatePaid.isAfter(existing.datePaid!)) ||
-                        (rowDatePaid != null && existing.datePaid == null) ||
-                        (startDate.isAfter(existing.startDate ?? DateTime(2000)));
-        if (isNewer) {
+        final currentData = existing.data;
+        if (currentData == null) { skipped++; continue; }
+
+        final hasChanges =
+            startDate != (currentData['startDate'] as Timestamp?)?.toDate() ||
+            endDate != (currentData['endDate'] as Timestamp?)?.toDate() ||
+            _str(row, 12) != (currentData['datePaid'] ?? '');
+
+        if (hasChanges) {
+          final currentEnd = (currentData['endDate'] as Timestamp?)?.toDate();
+          final currentStart = (currentData['startDate'] as Timestamp?)?.toDate();
           final docRef = firestore.collection('women_members').doc(existing.docId);
-          final currentDoc = await docRef.get();
-          if (currentDoc.exists) {
-            final currentData = currentDoc.data()!;
-            final currentEnd = (currentData['endDate'] as Timestamp?)?.toDate();
-            if (currentEnd == null || endDate != currentEnd) {
-              await docRef.collection('history').add({
-                'membership':   currentData['membership'] ?? '',
-                'package':      currentData['package'] ?? '',
-                'startDate':    currentData['startDate'],
-                'endDate':      currentData['endDate'],
-                'datePaid':     currentData['datePaid'] ?? '',
-                'monthPaid':    currentData['monthPaid'] ?? '',
-                'recept':       currentData['recept'] ?? '',
-                'benefit':      currentData['benefit'] ?? '',
-                'cash':         currentData['cash'] ?? '',
-                'creditCard':   currentData['creditCard'] ?? '',
-                'status':       'inactive',
-              });
-            }
-            await docRef.update(memberData);
-            existingMap[cpr] = _ExistingMember(docId: existing.docId, startDate: startDate, datePaid: rowDatePaid);
-            updated++;
+          if (currentEnd != endDate || currentStart != startDate) {
+            final historyRef = docRef.collection('history').doc();
+            batch.set(historyRef, {
+              'membership':   currentData['membership'] ?? '',
+              'package':      currentData['package'] ?? '',
+              'startDate':    currentData['startDate'],
+              'endDate':      currentData['endDate'],
+              'datePaid':     currentData['datePaid'] ?? '',
+              'monthPaid':    currentData['monthPaid'] ?? '',
+              'recept':       currentData['recept'] ?? '',
+              'benefit':      currentData['benefit'] ?? '',
+              'cash':         currentData['cash'] ?? '',
+              'creditCard':   currentData['creditCard'] ?? '',
+              'status':       'inactive',
+            });
+            batchCount++;
           }
+          batch.update(docRef, memberData);
+          batchCount++;
+          existingMap[cpr] = _ExistingMember(docId: existing.docId, startDate: startDate, datePaid: _parseDate(_str(row, 12)), data: memberData);
+          updated++;
         } else {
           skipped++;
         }
       }
+
+      if (batchCount >= 499) await commitBatch();
     }
 
+    await commitBatch();
     return WomenSyncResult(added: added, skipped: skipped, updated: updated);
   }
 
@@ -220,7 +254,8 @@ class _ExistingMember {
   final String docId;
   final DateTime? startDate;
   final DateTime? datePaid;
-  _ExistingMember({required this.docId, this.startDate, this.datePaid});
+  final Map<String, dynamic>? data;
+  _ExistingMember({required this.docId, this.startDate, this.datePaid, this.data});
 }
 
 class WomenSyncResult {
