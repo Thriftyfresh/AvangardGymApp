@@ -24,29 +24,31 @@ class NotificationService {
         .where('status', isEqualTo: 'active')
         .get();
 
-    int notifId = 0;
+    final expiring = <Map<String, dynamic>>[];
     for (final doc in snap.docs) {
       final data = doc.data();
       final endDateRaw = data['endDate'];
       if (endDateRaw == null) continue;
       final endDate = (endDateRaw as Timestamp).toDate();
       final daysLeft = endDate.difference(now).inDays;
-      final name = data['name'] ?? 'Member';
-
-      if (daysLeft == 7 || daysLeft == 3 || daysLeft == 1) {
-        await _sendNotification(
-          id: notifId++,
-          title: '⚠️ Membership Expiring Soon',
-          body: '$name\'s membership expires in $daysLeft day${daysLeft == 1 ? '' : 's'}!',
-        );
-      } else if (daysLeft == 0) {
-        await _sendNotification(
-          id: notifId++,
-          title: '🔴 Membership Expired Today',
-          body: '$name\'s membership has expired today!',
-        );
+      if (daysLeft == 7 || daysLeft == 3 || daysLeft == 1 || daysLeft == 0) {
+        expiring.add({'name': data['name'] ?? 'Member', 'daysLeft': daysLeft});
       }
     }
+
+    if (expiring.isEmpty) return;
+
+    // Send a single summary notification instead of one per member
+    final count = expiring.length;
+    final first = expiring.first;
+    final title = count == 1
+        ? (first['daysLeft'] == 0 ? '🔴 Membership Expired Today' : '⚠️ Membership Expiring Soon')
+        : '⚠️ $count Memberships Expiring Soon';
+    final body = count == 1
+        ? '${first['name']}\' membership ${first['daysLeft'] == 0 ? 'expired today' : 'expires in ${first['daysLeft']} day${first['daysLeft'] == 1 ? '' : 's'}'}!'
+        : expiring.take(3).map((e) => '${e['name']} (${e['daysLeft'] == 0 ? 'today' : '${e['daysLeft']}d'})').join(', ') + (count > 3 ? ' +${count - 3} more' : '');
+
+    await _sendNotification(id: 0, title: title, body: body);
   }
 
   static Future<void> _sendNotification({

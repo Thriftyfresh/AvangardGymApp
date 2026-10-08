@@ -23,20 +23,7 @@ class SheetsRepository {
   // 7: Membership  8: Referral  9: Package  10: Start  11: Finish
   // 12: date paid  13: Month paid  14: Recept  15: Benefit  16: Cash  17: Credit card
 
-  Future<SyncResult> nukeAndReimport() async {
-    final firestore = FirebaseFirestore.instance;
-    // Delete all members and their history subcollections
-    final snap = await firestore.collection('members').get();
-    for (final doc in snap.docs) {
-      final historySnap = await doc.reference.collection('history').get();
-      for (final h in historySnap.docs) { await h.reference.delete(); }
-      await doc.reference.delete();
-    }
-    // Delete audit logs
-    final auditSnap = await firestore.collection('audit_logs').get();
-    for (final doc in auditSnap.docs) { await doc.reference.delete(); }
-    return syncMembers();
-  }
+  Future<SyncResult> nukeAndReimport() => syncMembers();
 
   Future<SyncResult> syncMembers() async {
     final firestore = FirebaseFirestore.instance;
@@ -44,15 +31,11 @@ class SheetsRepository {
     final existingSnap = await firestore.collection('members').get();
     final existingMap = <String, _ExistingMember>{};
     for (final doc in existingSnap.docs) {
-      final d = doc.data();
-      final cpr = (d['cpr'] ?? '').toString();
+      final cpr = (doc.data()['cpr'] ?? '').toString();
       if (cpr.isNotEmpty) {
-        existingMap[cpr] = _ExistingMember(
-          docId: doc.id,
-          startDate: (d['startDate'] as Timestamp?)?.toDate(),
-          datePaid: _parseDate((d['datePaid'] ?? '').toString()),
-          data: d,
-        );
+        final startDate = (doc.data()['startDate'] as Timestamp?)?.toDate();
+        final datePaid = _parseDate((doc.data()['datePaid'] ?? '').toString());
+        existingMap[cpr] = _ExistingMember(docId: doc.id, startDate: startDate, datePaid: datePaid);
       }
     }
 
@@ -64,19 +47,6 @@ class SheetsRepository {
     int added = 0;
     int skipped = 0;
     int updated = 0;
-    final today = DateTime.now();
-
-    // Collect all writes to execute in batches
-    var batch = firestore.batch();
-    int batchCount = 0;
-
-    Future<void> commitBatch() async {
-      if (batchCount > 0) {
-        await batch.commit();
-        batch = firestore.batch();
-        batchCount = 0;
-      }
-    }
 
     for (final row in rows) {
       if (row.length < 4) { skipped++; continue; }
@@ -89,6 +59,7 @@ class SheetsRepository {
 
       final startDate = _parseDate(_str(row, 10));
       final endDate   = _parseDate(_str(row, 11));
+      final today     = DateTime.now();
 
       if (startDate == null || endDate == null) { skipped++; continue; }
       if (startDate.year < 2000 || startDate.year > 2100) { skipped++; continue; }
@@ -119,57 +90,47 @@ class SheetsRepository {
       };
 
       if (!existingMap.containsKey(cpr)) {
-        final newRef = firestore.collection('members').doc();
-        batch.set(newRef, memberData);
-        existingMap[cpr] = _ExistingMember(docId: newRef.id, startDate: startDate, datePaid: _parseDate(_str(row, 12)), data: memberData);
-        batchCount++;
+        final ref = await firestore.collection('members').add(memberData);
+        existingMap[cpr] = _ExistingMember(docId: ref.id, startDate: startDate, datePaid: _parseDate(_str(row, 12)));
         added++;
       } else {
         final existing = existingMap[cpr]!;
         if (existing.docId.isEmpty) { skipped++; continue; }
-        final currentData = existing.data;
-        if (currentData == null) { skipped++; continue; }
-
-        final hasChanges =
-            startDate != (currentData['startDate'] as Timestamp?)?.toDate() ||
-            endDate != (currentData['endDate'] as Timestamp?)?.toDate() ||
-            _str(row, 12) != (currentData['datePaid'] ?? '');
-
-        if (hasChanges) {
-          final currentEnd = (currentData['endDate'] as Timestamp?)?.toDate();
-          final currentStart = (currentData['startDate'] as Timestamp?)?.toDate();
+        final rowDatePaid = _parseDate(_str(row, 12));
+        final isNewer = (rowDatePaid != null && existing.datePaid != null && rowDatePaid.isAfter(existing.datePaid!)) ||
+                        (rowDatePaid != null && existing.datePaid == null) ||
+                        (startDate.isAfter(existing.startDate ?? DateTime(2000)));
+        if (isNewer) {
           final docRef = firestore.collection('members').doc(existing.docId);
-          if (currentEnd != endDate || currentStart != startDate) {
-            final historyRef = docRef.collection('history').doc();
-            batch.set(historyRef, {
-              'membership':   currentData['membership'] ?? '',
-              'package':      currentData['package'] ?? '',
-              'startDate':    currentData['startDate'],
-              'endDate':      currentData['endDate'],
-              'datePaid':     currentData['datePaid'] ?? '',
-              'monthPaid':    currentData['monthPaid'] ?? '',
-              'recept':       currentData['recept'] ?? '',
-              'benefit':      currentData['benefit'] ?? '',
-              'cash':         currentData['cash'] ?? '',
-              'creditCard':   currentData['creditCard'] ?? '',
-              'status':       'inactive',
-            });
-            batchCount++;
+          final currentDoc = await docRef.get();
+          if (currentDoc.exists) {
+            final currentData = currentDoc.data()!;
+            final currentEnd = (currentData['endDate'] as Timestamp?)?.toDate();
+            if (currentEnd == null || endDate != currentEnd) {
+              await docRef.collection('history').add({
+                'membership':   currentData['membership'] ?? '',
+                'package':      currentData['package'] ?? '',
+                'startDate':    currentData['startDate'],
+                'endDate':      currentData['endDate'],
+                'datePaid':     currentData['datePaid'] ?? '',
+                'monthPaid':    currentData['monthPaid'] ?? '',
+                'recept':       currentData['recept'] ?? '',
+                'benefit':      currentData['benefit'] ?? '',
+                'cash':         currentData['cash'] ?? '',
+                'creditCard':   currentData['creditCard'] ?? '',
+                'status':       'inactive',
+              });
+            }
+            await docRef.update(memberData);
+            existingMap[cpr] = _ExistingMember(docId: existing.docId, startDate: startDate, datePaid: rowDatePaid);
+            updated++;
           }
-          batch.update(docRef, memberData);
-          batchCount++;
-          existingMap[cpr] = _ExistingMember(docId: existing.docId, startDate: startDate, datePaid: _parseDate(_str(row, 12)), data: memberData);
-          updated++;
         } else {
           skipped++;
         }
       }
-
-      // Firestore batch limit is 500 operations
-      if (batchCount >= 499) await commitBatch();
     }
 
-    await commitBatch();
     return SyncResult(added: added, skipped: skipped, updated: updated);
   }
 
@@ -259,8 +220,7 @@ class _ExistingMember {
   final String docId;
   final DateTime? startDate;
   final DateTime? datePaid;
-  final Map<String, dynamic>? data;
-  _ExistingMember({required this.docId, this.startDate, this.datePaid, this.data});
+  _ExistingMember({required this.docId, this.startDate, this.datePaid});
 }
 
 class SyncResult {
